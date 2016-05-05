@@ -36,7 +36,7 @@ func main() {
 func server() {
 	r := mux.NewRouter()
 	s := wsqueue.NewServer(r, "", "", "")
-	q := s.CreateQueue("topic1")
+	q := s.CreateTopic("topic1")
 
 	q.OpenedConnectionCallback = func(c *wsqueue.Conn) {
 		log.Println("Welcome " + c.ID)
@@ -75,7 +75,7 @@ func client(ID string) {
 			Host:     "localhost:9000",
 			Route:    "/",
 		}
-		cMessage, cError, err := c.OpenQueue("topic1")
+		cMessage, cError, err := c.Subscribe("topic1")
 		if err != nil {
 			panic(err)
 		}

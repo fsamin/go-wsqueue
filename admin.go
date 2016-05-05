@@ -34,19 +34,3 @@ const (
 	QUEUE_ACL_PERM_ALL                = "ALL"
 	QUEUE_ACL_PERM_ADMIN              = "ADMIN"
 )
-
-func createAdminQueue(s *Server, adminQueueOptions *QueueOptions) *Queue {
-	adminQueue, _ := s.NewQueue("admin")
-	adminQueue.Options = adminQueueOptions
-	adminQueue.OpenedConnectionCallback = func(conn *Conn) {
-
-	}
-	adminQueue.ClosedConnectionCallback = func(conn *Conn) {
-
-	}
-	adminQueue.OnMessageCallback = func(conn *Conn, data Message) error {
-		return nil
-	}
-
-	return adminQueue
-}

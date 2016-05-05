@@ -16,7 +16,18 @@ import (
 type Server struct {
 	Router      *mux.Router
 	RoutePrefix string
-	AdminQueue  *Queue
+}
+
+type Options struct {
+	ACL *QueueACL `json:"acl,omitempty"`
+}
+
+type ConnID string
+
+//Conn is a conn
+type Conn struct {
+	ID     ConnID
+	WSConn *websocket.Conn
 }
 
 var upgrader = websocket.Upgrader{
@@ -29,45 +40,19 @@ func NewServer(router *mux.Router, routePrefix, username, password string) *Serv
 		Router:      router,
 		RoutePrefix: routePrefix,
 	}
-	adminQueueOptions := &QueueOptions{
-	/*ACL: &QueueACL{
-		[]QueueACE{
-			QueueACEDigest{QueueACE{QUEUE_ACL_SCHEME_DIGEST, QUEUE_ACL_PERM_ADMIN}, username, password},
-		},
-	},*/
-	}
-	adminQueue := createAdminQueue(s, adminQueueOptions)
-	s.RegisterQueue(adminQueue)
 	return s
 }
 
-func (s *Server) NewQueue(topic string) (*Queue, error) {
-	queue := &Queue{
-		Topic: topic,
-	}
-	return queue, nil
-}
-
-func (s *Server) RegisterQueue(q *Queue) {
-	log.Printf("Register queue %s on route %s", q.Topic, s.RoutePrefix+"/wsqueue/"+q.Topic)
-
-	q.mutex = &sync.Mutex{}
-	q.wsConnections = make(map[string][]*Conn)
-
-	handler := createHandler(q)
-	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/"+q.Topic, handler)
-}
-
-//CreateQueue create queue
-func (s *Server) CreateQueue(topic string) *Queue {
-	queue, _ := s.NewQueue(topic)
-	s.RegisterQueue(queue)
-	return queue
-}
-
-func createHandler(q *Queue) func(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Creating handler for %s", q.Topic)
-
+func createHandler(
+	mutex *sync.Mutex,
+	wsConnections *map[ConnID]*Conn,
+	openedConnectionCallback *func(*Conn),
+	closedConnectionCallback *func(*Conn),
+	onMessageCallback *func(*Conn, Message) error,
+) func(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -75,38 +60,38 @@ func createHandler(q *Queue) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		q.mutex.Lock()
+		mutex.Lock()
 		conn := &Conn{
-			ID:     uuid.NewV1().String(),
+			ID:     ConnID(uuid.NewV1().String()),
 			WSConn: c,
 		}
-		if q.wsConnections[conn.ID] == nil {
-			q.wsConnections[conn.ID] = []*Conn{conn}
-		} else {
-			q.wsConnections[conn.ID] = append(q.wsConnections[conn.ID], conn)
+		if (*wsConnections)[conn.ID] != nil {
+			(*wsConnections)[conn.ID].WSConn.Close()
+			(*closedConnectionCallback)((*wsConnections)[conn.ID])
 		}
-		q.mutex.Unlock()
+		(*wsConnections)[conn.ID] = conn
+		mutex.Unlock()
 
-		if q.OpenedConnectionCallback != nil {
-			go q.OpenedConnectionCallback(conn)
+		if (*openedConnectionCallback) != nil {
+			go (*openedConnectionCallback)(conn)
 		}
 
 		defer c.Close()
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				if q.ClosedConnectionCallback != nil {
-					go q.ClosedConnectionCallback(conn)
+				if (*closedConnectionCallback) != nil {
+					go (*closedConnectionCallback)(conn)
 				}
 				break
 			}
 
-			if q.OnMessageCallback != nil {
+			if (*onMessageCallback) != nil {
 				var parsedMessage Message
 				if e := json.Unmarshal(message, &parsedMessage); err != nil {
 					log.Println(e.Error())
 				}
-				go q.OnMessageCallback(conn, parsedMessage)
+				go (*onMessageCallback)(conn, parsedMessage)
 			}
 		}
 

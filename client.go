@@ -2,6 +2,7 @@ package wsqueue
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -17,34 +18,61 @@ type Client struct {
 	conn     *websocket.Conn
 }
 
-func (c *Client) connect(q string) error {
-	c.dialer = websocket.DefaultDialer
-	log.Println("Dialing " + c.Protocol + "://" + c.Host + c.Route + "wsqueue/" + q)
+type wsqueueType int
 
+const (
+	topic wsqueueType = iota
+	queue
+)
+
+func (c *Client) connect(q string, t wsqueueType) error {
+	var suffix string
+	switch t {
+	case topic:
+		suffix = "topic"
+	case queue:
+		suffix = "queue"
+	}
+
+	var url = fmt.Sprintf("%s://%s%swsqueue/%s/%s", c.Protocol, c.Host, c.Route, suffix, q)
+	c.dialer = websocket.DefaultDialer
+
+	log.Println("Dialing " + url)
 	var err error
-	c.conn, _, err = c.dialer.Dial(c.Protocol+"://"+c.Host+c.Route+"wsqueue/"+q, http.Header{})
+	c.conn, _, err = c.dialer.Dial(url, http.Header{})
 	return err
 }
 
-func (c *Client) OpenQueue(q string) (chan Message, chan error, error) {
-	e := c.connect(q)
+func (c *Client) Subscribe(q string) (chan Message, chan error, error) {
+	e := c.connect(q, topic)
 	if e != nil {
 		return nil, nil, e
 	}
 	chanMessage := make(chan Message)
 	chanError := make(chan error)
-	go c.handler(q, chanMessage, chanError)
+	go c.handler(q, chanMessage, chanError, topic)
 	return chanMessage, chanError, nil
 }
 
-func (c *Client) handler(q string, chanMessage chan Message, chanError chan error) {
+func (c *Client) Listen(q string) (chan Message, chan error, error) {
+	e := c.connect(q, queue)
+	if e != nil {
+		return nil, nil, e
+	}
+	chanMessage := make(chan Message)
+	chanError := make(chan error)
+	go c.handler(q, chanMessage, chanError, queue)
+	return chanMessage, chanError, nil
+}
+
+func (c *Client) handler(q string, chanMessage chan Message, chanError chan error, t wsqueueType) {
 	for {
 		_, p, e := c.conn.ReadMessage()
 		if e != nil {
 			if websocket.IsUnexpectedCloseError(e, websocket.CloseMessage) {
 				chanError <- e
 				time.Sleep(30 * time.Second)
-				for err := c.connect(q); err != nil; c.connect(q) {
+				for err := c.connect(q, t); err != nil; c.connect(q, t) {
 					chanError <- e
 				}
 			} else {
@@ -57,6 +85,7 @@ func (c *Client) handler(q string, chanMessage chan Message, chanError chan erro
 				log.Println(err)
 			}
 			message.Header["received"] = time.Now().String()
+			//Ack
 			chanMessage <- *message
 		}
 	}
