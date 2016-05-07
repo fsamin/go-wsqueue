@@ -12,12 +12,12 @@ import (
 //active subscription at the time the broker receives the message will get a
 //copy of the message.
 type Topic struct {
-	Options                  *Options                   `json:"options,omitempty"`
-	Topic                    string                     `json:"topic,omitempty"`
-	OpenedConnectionCallback func(*Conn)                `json:"-"`
-	ClosedConnectionCallback func(*Conn)                `json:"-"`
-	OnMessageCallback        func(*Conn, Message) error `json:"-"`
-	mutex                    *sync.Mutex
+	Options                  *Options                    `json:"options,omitempty"`
+	Topic                    string                      `json:"topic,omitempty"`
+	OpenedConnectionCallback func(*Conn)                 `json:"-"`
+	ClosedConnectionCallback func(*Conn)                 `json:"-"`
+	OnMessageCallback        func(*Conn, *Message) error `json:"-"`
+	mutex                    *sync.RWMutex
 	wsConnections            map[ConnID]*Conn
 }
 
@@ -31,7 +31,7 @@ func (s *Server) CreateTopic(topic string) *Topic {
 func (s *Server) newTopic(topic string) (*Topic, error) {
 	t := &Topic{
 		Topic:         topic,
-		mutex:         &sync.Mutex{},
+		mutex:         &sync.RWMutex{},
 		wsConnections: make(map[ConnID]*Conn),
 	}
 	return t, nil

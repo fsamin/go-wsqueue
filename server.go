@@ -44,11 +44,11 @@ func NewServer(router *mux.Router, routePrefix, username, password string) *Serv
 }
 
 func createHandler(
-	mutex *sync.Mutex,
+	mutex *sync.RWMutex,
 	wsConnections *map[ConnID]*Conn,
 	openedConnectionCallback *func(*Conn),
 	closedConnectionCallback *func(*Conn),
-	onMessageCallback *func(*Conn, Message) error,
+	onMessageCallback *func(*Conn, *Message) error,
 ) func(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -62,7 +62,7 @@ func createHandler(
 
 		mutex.Lock()
 		conn := &Conn{
-			ID:     ConnID(uuid.NewV1().String()),
+			ID:     ConnID(uuid.NewV4().String()),
 			WSConn: c,
 		}
 		if (*wsConnections)[conn.ID] != nil {
@@ -80,6 +80,7 @@ func createHandler(
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
+				delete(*wsConnections, conn.ID)
 				if (*closedConnectionCallback) != nil {
 					go (*closedConnectionCallback)(conn)
 				}
@@ -91,7 +92,7 @@ func createHandler(
 				if e := json.Unmarshal(message, &parsedMessage); err != nil {
 					log.Println(e.Error())
 				}
-				go (*onMessageCallback)(conn, parsedMessage)
+				go (*onMessageCallback)(conn, &parsedMessage)
 			}
 		}
 

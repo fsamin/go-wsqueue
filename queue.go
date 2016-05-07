@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+const (
+	MaxUint = ^uint(0)
+	MinUint = 0
+	MaxInt  = int(MaxUint >> 1)
+	MinInt  = -MaxInt - 1
+)
+
 //Queue implements load balancer semantics. A single message will be received by
 // exactly one consumer. If there are no consumers available at the time the
 // message is sent it will be kept until a consumer is available that can process
@@ -21,8 +28,8 @@ type Queue struct {
 	Queue                  string   `json:"topic,omitempty"`
 	newConsumerCallback    func(*Conn)
 	consumerExitedCallback func(*Conn)
-	ackCallback            func(*Conn, Message) error
-	mutex                  *sync.Mutex
+	ackCallback            func(*Conn, *Message) error
+	mutex                  *sync.RWMutex
 	wsConnections          map[ConnID]*Conn
 	chanMessage            chan *Message
 	acks                   map[*Message]bool
@@ -39,12 +46,15 @@ func (s *Server) CreateQueue(name string, bufferSize int) *Queue {
 func (s *Server) newQueue(name string, bufferSize int) (*Queue, error) {
 	q := &Queue{
 		Queue:         name,
-		mutex:         &sync.Mutex{},
+		mutex:         &sync.RWMutex{},
 		wsConnections: make(map[ConnID]*Conn),
 		chanMessage:   make(chan *Message, bufferSize),
 		acks:          make(map[*Message]bool),
 	}
 	q.lb = &loadBalancer{queue: q, counter: make(map[ConnID]int)}
+	q.newConsumerCallback = newConsumerCallback(q)
+	q.consumerExitedCallback = consumerExitedCallback(q)
+	q.ackCallback = ackCallback(q)
 	return q, nil
 }
 
@@ -67,63 +77,102 @@ type loadBalancer struct {
 	counter map[ConnID]int
 }
 
-func (lb *loadBalancer) next() (ConnID, error) {
+func (lb *loadBalancer) next() (*ConnID, error) {
 	lb.queue.mutex.Lock()
 	defer lb.queue.mutex.Unlock()
 
 	if len(lb.queue.wsConnections) == 0 {
-		log.Println("no connections...")
-		return ConnID(""), errors.New("No connection available")
+		return nil, errors.New("No connection available")
 	}
 
-	var minCounter = -1
+	var minCounter = MaxInt
 	for id := range lb.queue.wsConnections {
-		c := lb.counter[id]
-		log.Println("Nb message sent to " + string(id) + " : " + strconv.Itoa(c))
-		if minCounter < c && len(lb.queue.wsConnections) > 1 {
-			log.Println("don't send to " + string(id) + "(" + strconv.Itoa(c) + ", " + strconv.Itoa(minCounter))
-			minCounter = c
-		} else {
-			c++
-			lb.counter[id] = c
-			return id, nil
+		counter := lb.counter[id]
+		log.Println("Nb message sent to " + string(id) + " : " + strconv.Itoa(counter) + ", " + strconv.Itoa(minCounter))
+		if counter < minCounter {
+			minCounter = counter
 		}
 	}
-	return ConnID(""), errors.New("No connection available")
+
+	for id := range lb.queue.wsConnections {
+		c := lb.counter[id]
+		if c == minCounter {
+			c++
+			lb.counter[id] = c
+			return &id, nil
+		}
+	}
+	log.Println("Any solution")
+	return nil, errors.New("No connection available")
 }
 
 //Send send a message
 func (q *Queue) Send(data interface{}) error {
+	log.Println("new message in mailbox")
 	m, e := newMessage(data)
 	if e != nil {
 		return e
 	}
 	if len(q.wsConnections) == 0 {
+		log.Println("no consumer, i will wait")
 		q.chanMessage <- m
 		return nil
 	}
-	return q.send(m)
+	q.send(m)
+	return nil
 }
 
-func (q *Queue) send(m *Message) error {
+func (q *Queue) send(m *Message) {
 	connID, err := q.lb.next()
 	if err != nil {
 		q.chanMessage <- m
 	} else {
-		log.Println("Send to connID : " + connID)
-		conn := q.wsConnections[connID]
+		conn := q.wsConnections[*connID]
 		q.acks[m] = false
 		b, _ := json.Marshal(m)
 		q.mutex.Lock()
-		conn.WSConn.WriteMessage(1, b)
+		err := conn.WSConn.WriteMessage(1, b)
 		q.mutex.Unlock()
+		if err != nil {
+			log.Println("Error while sending to "+*connID, err.Error())
+			q.chanMessage <- m
+		}
 	}
-	return nil
 }
 
 func (q *Queue) retry(interval int64) {
 	for m := range q.chanMessage {
 		time.Sleep(time.Duration(interval) * time.Second)
 		q.send(m)
+	}
+}
+
+func newConsumerCallback(q *Queue) func(*Conn) {
+	return func(c *Conn) {
+		log.Println("New consumer : " + c.ID)
+		q.mutex.Lock()
+		q.lb.counter[c.ID] = 0
+		for id := range q.lb.counter {
+			q.lb.counter[id] = 0
+		}
+		q.mutex.Unlock()
+	}
+}
+
+func consumerExitedCallback(q *Queue) func(*Conn) {
+	return func(c *Conn) {
+		log.Println("Lost consumer : " + c.ID)
+		q.mutex.Lock()
+		delete(q.lb.counter, c.ID)
+		q.mutex.Unlock()
+	}
+}
+
+func ackCallback(q *Queue) func(*Conn, *Message) error {
+	return func(c *Conn, m *Message) error {
+		q.mutex.Lock()
+		q.acks[m] = true
+		q.mutex.Unlock()
+		return nil
 	}
 }

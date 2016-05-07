@@ -52,7 +52,7 @@ func server() {
 
 	go func() {
 		for {
-			time.Sleep(10 * time.Second)
+			time.Sleep(6 * time.Second)
 			s, _ := randutil.AlphaString(10)
 			q.Send("message from goroutine 2 : " + s)
 		}
