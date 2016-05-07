@@ -5,7 +5,7 @@ WIP
 ## Introduction
 
 - Golang API over gorilla/mux and gorilla/websocket
-- Kink of AMQP but over websockets
+- Kind of AMQP but over websockets
 
 ### Publish & Subscribe Pattern
 
