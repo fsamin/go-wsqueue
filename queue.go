@@ -24,16 +24,16 @@ const (
 // A queue can have many consumers with messages load balanced across the
 // available consumers.
 type Queue struct {
-	Options                *Options `json:"options,omitempty"`
-	Queue                  string   `json:"topic,omitempty"`
-	newConsumerCallback    func(*Conn)
-	consumerExitedCallback func(*Conn)
-	ackCallback            func(*Conn, *Message) error
-	mutex                  *sync.RWMutex
-	wsConnections          map[ConnID]*Conn
-	chanMessage            chan *Message
-	acks                   map[*Message]bool
-	lb                     *loadBalancer
+	Options               *Options `json:"options,omitempty"`
+	Queue                 string   `json:"topic,omitempty"`
+	newConsumerHandler    func(*Conn)
+	consumerExitedHandler func(*Conn)
+	ackHandler            func(*Conn, *Message) error
+	mutex                 *sync.RWMutex
+	wsConnections         map[ConnID]*Conn
+	chanMessage           chan *Message
+	acks                  map[*Message]bool
+	lb                    *loadBalancer
 }
 
 //CreateQueue create queue
@@ -52,9 +52,9 @@ func (s *Server) newQueue(name string, bufferSize int) (*Queue, error) {
 		acks:          make(map[*Message]bool),
 	}
 	q.lb = &loadBalancer{queue: q, counter: make(map[ConnID]int)}
-	q.newConsumerCallback = newConsumerCallback(q)
-	q.consumerExitedCallback = consumerExitedCallback(q)
-	q.ackCallback = ackCallback(q)
+	q.newConsumerHandler = newConsumerHandler(q)
+	q.consumerExitedHandler = consumerExitedHandler(q)
+	q.ackHandler = ackHandler(q)
 	return q, nil
 }
 
@@ -64,9 +64,9 @@ func (s *Server) RegisterQueue(q *Queue) {
 	handler := createHandler(
 		q.mutex,
 		&q.wsConnections,
-		&q.newConsumerCallback,
-		&q.consumerExitedCallback,
-		&q.ackCallback,
+		&q.newConsumerHandler,
+		&q.consumerExitedHandler,
+		&q.ackHandler,
 	)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/queue/"+q.Queue, handler)
 	go q.retry(5)
@@ -147,7 +147,7 @@ func (q *Queue) retry(interval int64) {
 	}
 }
 
-func newConsumerCallback(q *Queue) func(*Conn) {
+func newConsumerHandler(q *Queue) func(*Conn) {
 	return func(c *Conn) {
 		log.Println("New consumer : " + c.ID)
 		q.mutex.Lock()
@@ -159,7 +159,7 @@ func newConsumerCallback(q *Queue) func(*Conn) {
 	}
 }
 
-func consumerExitedCallback(q *Queue) func(*Conn) {
+func consumerExitedHandler(q *Queue) func(*Conn) {
 	return func(c *Conn) {
 		log.Println("Lost consumer : " + c.ID)
 		q.mutex.Lock()
@@ -168,7 +168,7 @@ func consumerExitedCallback(q *Queue) func(*Conn) {
 	}
 }
 
-func ackCallback(q *Queue) func(*Conn, *Message) error {
+func ackHandler(q *Queue) func(*Conn, *Message) error {
 	return func(c *Conn, m *Message) error {
 		q.mutex.Lock()
 		q.acks[m] = true

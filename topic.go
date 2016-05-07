@@ -12,13 +12,13 @@ import (
 //active subscription at the time the broker receives the message will get a
 //copy of the message.
 type Topic struct {
-	Options                  *Options                    `json:"options,omitempty"`
-	Topic                    string                      `json:"topic,omitempty"`
-	OpenedConnectionCallback func(*Conn)                 `json:"-"`
-	ClosedConnectionCallback func(*Conn)                 `json:"-"`
-	OnMessageCallback        func(*Conn, *Message) error `json:"-"`
-	mutex                    *sync.RWMutex
-	wsConnections            map[ConnID]*Conn
+	Options                 *Options                    `json:"options,omitempty"`
+	Topic                   string                      `json:"topic,omitempty"`
+	OpenedConnectionHandler func(*Conn)                 `json:"-"`
+	ClosedConnectionHandler func(*Conn)                 `json:"-"`
+	OnMessageHandler        func(*Conn, *Message) error `json:"-"`
+	mutex                   *sync.RWMutex
+	wsConnections           map[ConnID]*Conn
 }
 
 //CreateTopic create topic
@@ -43,9 +43,9 @@ func (s *Server) RegisterTopic(t *Topic) {
 	handler := createHandler(
 		t.mutex,
 		&t.wsConnections,
-		&t.OpenedConnectionCallback,
-		&t.ClosedConnectionCallback,
-		&t.OnMessageCallback,
+		&t.OpenedConnectionHandler,
+		&t.ClosedConnectionHandler,
+		&t.OnMessageHandler,
 	)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/topic/"+t.Topic, handler)
 }
