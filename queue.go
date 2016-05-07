@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -88,7 +87,6 @@ func (lb *loadBalancer) next() (*ConnID, error) {
 	var minCounter = MaxInt
 	for id := range lb.queue.wsConnections {
 		counter := lb.counter[id]
-		log.Println("Nb message sent to " + string(id) + " : " + strconv.Itoa(counter) + ", " + strconv.Itoa(minCounter))
 		if counter < minCounter {
 			minCounter = counter
 		}
@@ -102,19 +100,16 @@ func (lb *loadBalancer) next() (*ConnID, error) {
 			return &id, nil
 		}
 	}
-	log.Println("Any solution")
 	return nil, errors.New("No connection available")
 }
 
 //Send send a message
 func (q *Queue) Send(data interface{}) error {
-	log.Println("new message in mailbox")
 	m, e := newMessage(data)
 	if e != nil {
 		return e
 	}
 	if len(q.wsConnections) == 0 {
-		log.Println("no consumer, i will wait")
 		q.chanMessage <- m
 		return nil
 	}
@@ -149,9 +144,9 @@ func (q *Queue) retry(interval int64) {
 
 func newConsumerHandler(q *Queue) func(*Conn) {
 	return func(c *Conn) {
-		log.Println("New consumer : " + c.ID)
 		q.mutex.Lock()
 		q.lb.counter[c.ID] = 0
+		//Reinitiatlisation du load balancer
 		for id := range q.lb.counter {
 			q.lb.counter[id] = 0
 		}
@@ -161,7 +156,6 @@ func newConsumerHandler(q *Queue) func(*Conn) {
 
 func consumerExitedHandler(q *Queue) func(*Conn) {
 	return func(c *Conn) {
-		log.Println("Lost consumer : " + c.ID)
 		q.mutex.Lock()
 		delete(q.lb.counter, c.ID)
 		q.mutex.Unlock()
