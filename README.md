@@ -77,12 +77,12 @@ func server() {
 	s := wsqueue.NewServer(r, "", "", "")
 	q := s.CreateTopic("topic1")
 
-	q.OpenedConnectionCallback = func(c *wsqueue.Conn) {
+	q.OpenedConnectionHandler = func(c *wsqueue.Conn) {
 		log.Println("Welcome " + c.ID)
 		q.Publish("Welcome " + c.ID)
 	}
 
-	q.ClosedConnectionCallback = func(c *wsqueue.Conn) {
+	q.ClosedConnectionHandler = func(c *wsqueue.Conn) {
 		log.Println("Bye bye " + c.ID)
 	}
 	http.Handle("/", r)
