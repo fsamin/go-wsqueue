@@ -2,6 +2,7 @@ package wsqueue
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -12,16 +13,33 @@ import (
 	"github.com/satori/go.uuid"
 )
 
+//Logfunc is a function that logs the provided message with optional
+//fmt.Sprintf-style arguments. By default, logs to the default log.Logger.
+//setting it to nil can be used to disable logging for this package.
+//This doesn’t enforce a coupling with any specific external package
+//and is already widely supported by existing loggers.
+var Logfunc func(string, ...interface{}) = log.Printf
+
 //Server is a server
 type Server struct {
 	Router      *mux.Router
 	RoutePrefix string
 }
 
-type Options struct {
-	ACL *QueueACL `json:"acl,omitempty"`
+type StorageDriver interface {
+	Open(options *StorageOptions)
+	Push(data interface{})
+	Pop() interface{}
 }
 
+type StorageOptions map[string]interface{}
+
+//Options is options on topic or queues
+type Options struct {
+	ACL ACL `json:"acl,omitempty"`
+}
+
+//ConnID a a connection ID
 type ConnID string
 
 //Conn is a conn
@@ -35,7 +53,7 @@ var upgrader = websocket.Upgrader{
 }
 
 //NewServer init a new WSQueue server
-func NewServer(router *mux.Router, routePrefix, username, password string) *Server {
+func NewServer(router *mux.Router, routePrefix string) *Server {
 	s := &Server{
 		Router:      router,
 		RoutePrefix: routePrefix,
@@ -56,7 +74,9 @@ func createHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Print("upgrade:", err)
+			Logfunc("Cannot upgrade connection %s", err.Error())
+			w.Write([]byte(fmt.Sprintf("Cannot upgrade connection %s", err.Error())))
+			w.WriteHeader(426)
 			return
 		}
 
@@ -80,9 +100,11 @@ func createHandler(
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
+				mutex.Lock()
 				delete(*wsConnections, conn.ID)
+				mutex.Unlock()
 				if (*closedConnectionCallback) != nil {
-					go (*closedConnectionCallback)(conn)
+					(*closedConnectionCallback)(conn)
 				}
 				break
 			}
@@ -90,9 +112,9 @@ func createHandler(
 			if (*onMessageCallback) != nil {
 				var parsedMessage Message
 				if e := json.Unmarshal(message, &parsedMessage); err != nil {
-					log.Println(e.Error())
+					Logfunc("Cannot Unmarshall message", e.Error())
 				}
-				go (*onMessageCallback)(conn, &parsedMessage)
+				(*onMessageCallback)(conn, &parsedMessage)
 			}
 		}
 

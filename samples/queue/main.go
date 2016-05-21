@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -35,8 +35,8 @@ func main() {
 
 func server() {
 	r := mux.NewRouter()
-	s := wsqueue.NewServer(r, "", "", "")
-	q := s.CreateQueue("queue1", 10)
+	s := wsqueue.NewServer(r, "")
+	q := s.CreateQueue("queue1", 2)
 
 	http.Handle("/", r)
 	go http.ListenAndServe("0.0.0.0:9000", r)
@@ -46,7 +46,8 @@ func server() {
 		for {
 			time.Sleep(5 * time.Second)
 			s, _ := randutil.AlphaString(10)
-			q.Send("message from goroutine 1 : " + s)
+			fmt.Println("send")
+			q.Send("> message from goroutine 1 : " + s)
 		}
 	}()
 
@@ -54,7 +55,8 @@ func server() {
 		for {
 			time.Sleep(6 * time.Second)
 			s, _ := randutil.AlphaString(10)
-			q.Send("message from goroutine 2 : " + s)
+			fmt.Println("send")
+			q.Send("> message from goroutine 2 : " + s)
 		}
 	}()
 }
@@ -74,9 +76,9 @@ func client(ID string) {
 		for {
 			select {
 			case m := <-cMessage:
-				log.Println("\n\n********* Client " + ID + " *********" + m.String() + "\n******************")
+				fmt.Println("\n\n********* Client " + ID + " *********" + m.String() + "\n******************")
 			case e := <-cError:
-				log.Println("\n\n********* Client " + ID + "  *********" + e.Error() + "\n******************")
+				fmt.Println("\n\n********* Client " + ID + "  *********" + e.Error() + "\n******************")
 			}
 		}
 	}()

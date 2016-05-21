@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -35,16 +35,16 @@ func main() {
 
 func server() {
 	r := mux.NewRouter()
-	s := wsqueue.NewServer(r, "", "", "")
+	s := wsqueue.NewServer(r, "")
 	q := s.CreateTopic("topic1")
 
 	q.OpenedConnectionHandler = func(c *wsqueue.Conn) {
-		log.Println("Welcome " + c.ID)
+		fmt.Println("Welcome " + c.ID)
 		q.Publish("Welcome " + c.ID)
 	}
 
 	q.ClosedConnectionHandler = func(c *wsqueue.Conn) {
-		log.Println("Bye bye " + c.ID)
+		fmt.Println("Bye bye " + c.ID)
 	}
 	http.Handle("/", r)
 	go http.ListenAndServe("0.0.0.0:9000", r)
@@ -82,9 +82,9 @@ func client(ID string) {
 		for {
 			select {
 			case m := <-cMessage:
-				log.Println("\n\n********* Client " + ID + " *********" + m.String() + "\n******************")
+				fmt.Println("\n\n********* Client " + ID + " *********" + m.String() + "\n******************")
 			case e := <-cError:
-				log.Println("\n\n********* Client " + ID + "  *********" + e.Error() + "\n******************")
+				fmt.Println("\n\n********* Client " + ID + "  *********" + e.Error() + "\n******************")
 			}
 		}
 	}()

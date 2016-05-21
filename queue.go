@@ -3,16 +3,19 @@ package wsqueue
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"sync"
 	"time"
 )
 
 const (
-	MaxUint = ^uint(0)
-	MinUint = 0
-	MaxInt  = int(MaxUint >> 1)
-	MinInt  = -MaxInt - 1
+	//MaxUint is the maximum uint on your platform
+	maxUint = ^uint(0)
+	//MinUint is the min uint on your platform
+	minUint = 0
+	//MaxInt is the max int on your platform
+	maxInt = int(maxUint >> 1)
+	//MinInt is the min int on your platform
+	minInt = -maxInt - 1
 )
 
 //Queue implements load balancer semantics. A single message will be received by
@@ -30,9 +33,11 @@ type Queue struct {
 	ackHandler            func(*Conn, *Message) error
 	mutex                 *sync.RWMutex
 	wsConnections         map[ConnID]*Conn
-	chanMessage           chan *Message
 	acks                  map[*Message]bool
 	lb                    *loadBalancer
+	store                 StorageDriver
+	storeOptions          *StorageOptions
+	stopQueue             chan bool
 }
 
 //CreateQueue create queue
@@ -47,19 +52,20 @@ func (s *Server) newQueue(name string, bufferSize int) (*Queue, error) {
 		Queue:         name,
 		mutex:         &sync.RWMutex{},
 		wsConnections: make(map[ConnID]*Conn),
-		chanMessage:   make(chan *Message, bufferSize),
 		acks:          make(map[*Message]bool),
 	}
 	q.lb = &loadBalancer{queue: q, counter: make(map[ConnID]int)}
 	q.newConsumerHandler = newConsumerHandler(q)
 	q.consumerExitedHandler = consumerExitedHandler(q)
 	q.ackHandler = ackHandler(q)
+	q.store = NewStack()
+	q.stopQueue = make(chan bool, 1)
 	return q, nil
 }
 
 //RegisterQueue register
 func (s *Server) RegisterQueue(q *Queue) {
-	log.Printf("Register queue %s on route %s", q.Queue, s.RoutePrefix+"/wsqueue/queue/"+q.Queue)
+	Logfunc("Register queue %s on route %s", q.Queue, s.RoutePrefix+"/wsqueue/queue/"+q.Queue)
 	handler := createHandler(
 		q.mutex,
 		&q.wsConnections,
@@ -67,8 +73,9 @@ func (s *Server) RegisterQueue(q *Queue) {
 		&q.consumerExitedHandler,
 		&q.ackHandler,
 	)
+	q.store.Open(q.storeOptions)
+	q.handle(5)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/queue/"+q.Queue, handler)
-	go q.retry(5)
 }
 
 type loadBalancer struct {
@@ -84,7 +91,7 @@ func (lb *loadBalancer) next() (*ConnID, error) {
 		return nil, errors.New("No connection available")
 	}
 
-	var minCounter = MaxInt
+	var minCounter = maxInt
 	for id := range lb.queue.wsConnections {
 		counter := lb.counter[id]
 		if counter < minCounter {
@@ -110,7 +117,7 @@ func (q *Queue) Send(data interface{}) error {
 		return e
 	}
 	if len(q.wsConnections) == 0 {
-		q.chanMessage <- m
+		q.store.Push(m)
 		return nil
 	}
 	q.send(m)
@@ -120,7 +127,8 @@ func (q *Queue) Send(data interface{}) error {
 func (q *Queue) send(m *Message) {
 	connID, err := q.lb.next()
 	if err != nil {
-		q.chanMessage <- m
+		Logfunc("Error while sending to %s : %s", *connID, err.Error())
+		q.store.Push(m)
 	} else {
 		conn := q.wsConnections[*connID]
 		q.acks[m] = false
@@ -129,17 +137,30 @@ func (q *Queue) send(m *Message) {
 		err := conn.WSConn.WriteMessage(1, b)
 		q.mutex.Unlock()
 		if err != nil {
-			log.Println("Error while sending to "+*connID, err.Error())
-			q.chanMessage <- m
+			Logfunc("Error while sending to %s : %s", *connID, err.Error())
+			q.store.Push(m)
 		}
 	}
 }
 
-func (q *Queue) retry(interval int64) {
-	for m := range q.chanMessage {
-		time.Sleep(time.Duration(interval) * time.Second)
-		q.send(m)
-	}
+func (q *Queue) handle(interval int64) {
+	var cont = true
+	go func(c *bool) {
+		for *c {
+			time.Sleep(time.Duration(interval) * time.Second)
+			data := q.store.Pop()
+			if data != nil {
+				m := data.(*Message)
+				q.send(m)
+			}
+		}
+	}(&cont)
+	go func(c *bool) {
+		var b bool
+		//FIXME: test
+		b = <-q.stopQueue
+		cont = *c && b
+	}(&cont)
 }
 
 func newConsumerHandler(q *Queue) func(*Conn) {
