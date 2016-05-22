@@ -1,5 +1,7 @@
 package wsqueue
 
+import "net/http"
+
 //ACL  stands for Access Control List. It's a slice of permission for a queue or a topic
 type ACL []ACE
 
@@ -48,3 +50,37 @@ const (
 	//ACLSSchemeIP scheme represents a "manually" set group of  user authenticated by their IP address
 	ACLSSchemeIP = "IP"
 )
+
+func checkACL(acl ACL, w http.ResponseWriter, r *http.Request) bool {
+	for _, ace := range acl {
+		switch ace.Scheme() {
+		case ACLSSchemeWorld:
+			Logfunc("Connection Authorized")
+			return true
+		case ACLSSchemeIP:
+			ip := r.Header.Get("X-Forwarded-For")
+			aceIP, b := ace.(*ACEIP)
+			if !b {
+				w.WriteHeader(http.StatusUnauthorized)
+				return false
+			}
+			if ip == aceIP.IP {
+				Logfunc("Connection Authorized for IP %s", ip)
+				return true
+			}
+			Warnfunc("Connection unauthorized for IP:%s", ip)
+		case ACLSSchemeDigest:
+			u, p, b := r.BasicAuth()
+			if b {
+				aceDigest, b := ace.(*ACEDigest)
+				if b && aceDigest.Username == u && aceDigest.Password == p {
+					Logfunc("Connection Authorized with BasicAuth %s", u)
+					return true
+				}
+			}
+			Warnfunc("Connection unauthorized for BasicAuth %s", u)
+		}
+	}
+	w.WriteHeader(http.StatusUnauthorized)
+	return false
+}

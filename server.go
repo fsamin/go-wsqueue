@@ -85,14 +85,7 @@ func createHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		if options != nil && len(options.ACL) > 0 {
-			for _, ace := range options.ACL {
-				switch ace.Scheme() {
-				case ACLSSchemeWorld:
-					Logfunc("Connection Authorized")
-				case ACLSSchemeIP:
 
-				}
-			}
 		}
 
 		c, err := upgrader.Upgrade(w, r, nil)
