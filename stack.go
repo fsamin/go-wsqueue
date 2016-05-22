@@ -3,6 +3,7 @@ package wsqueue
 import (
 	"fmt"
 	"sync"
+	"time"
 )
 
 //Stack is a thread-safe "First In First Out" stack
@@ -10,6 +11,7 @@ type Stack struct {
 	top   *stackItem
 	count int
 	mutex *sync.Mutex
+	max   int
 }
 
 type stackItem struct {
@@ -24,7 +26,17 @@ func NewStack() *Stack {
 	return s
 }
 
-func (s *Stack) Open(d *StorageOptions) {}
+func (s *Stack) Open(o *Options) {
+	if o != nil {
+		m := o.Storage
+		i, b := m["capacity"].(int)
+		if !b {
+			Logfunc("Error with stack capacity option : %s", i)
+			return
+		}
+		s.max = i
+	}
+}
 
 // Get peeks at the n-th item in the stack. Unlike other operations, this one costs O(n).
 func (s *Stack) Get(index int) (interface{}, error) {
@@ -63,11 +75,18 @@ func (s *Stack) Len() int {
 
 //Push add an item a the top of the stack
 func (s *Stack) Push(item interface{}) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	if s.max > 0 {
+		f := NewFibonacci()
+		for s.Len() >= s.max {
+			Warnfunc("Stack overflow. Waiting...")
+			f.WaitForIt(time.Second)
+		}
+	}
 
 	n := &stackItem{data: item}
 
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	if s.top == nil {
 		s.top = n
 	} else {

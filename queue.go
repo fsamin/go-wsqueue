@@ -36,7 +36,6 @@ type Queue struct {
 	acks                  map[*Message]bool
 	lb                    *loadBalancer
 	store                 StorageDriver
-	storeOptions          *StorageOptions
 	stopQueue             chan bool
 }
 
@@ -60,6 +59,7 @@ func (s *Server) newQueue(name string, bufferSize int) (*Queue, error) {
 	q.ackHandler = ackHandler(q)
 	q.store = NewStack()
 	q.stopQueue = make(chan bool, 1)
+	q.Options = &Options{Storage: StorageOptions{"capacity": bufferSize}}
 	return q, nil
 }
 
@@ -73,7 +73,7 @@ func (s *Server) RegisterQueue(q *Queue) {
 		&q.consumerExitedHandler,
 		&q.ackHandler,
 	)
-	q.store.Open(q.storeOptions)
+	q.store.Open(q.Options)
 	q.handle(5)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/queue/"+q.Queue, handler)
 }
@@ -117,6 +117,7 @@ func (q *Queue) Send(data interface{}) error {
 		return e
 	}
 	if len(q.wsConnections) == 0 {
+		Logfunc("No consumer, pushing message to stack")
 		q.store.Push(m)
 		return nil
 	}
@@ -127,7 +128,7 @@ func (q *Queue) Send(data interface{}) error {
 func (q *Queue) send(m *Message) {
 	connID, err := q.lb.next()
 	if err != nil {
-		Logfunc("Error while sending to %s : %s", *connID, err.Error())
+		Warnfunc("Error while sending to %s : %s", *connID, err.Error())
 		q.store.Push(m)
 	} else {
 		conn := q.wsConnections[*connID]
@@ -148,10 +149,15 @@ func (q *Queue) handle(interval int64) {
 	go func(c *bool) {
 		for *c {
 			time.Sleep(time.Duration(interval) * time.Second)
-			data := q.store.Pop()
-			if data != nil {
-				m := data.(*Message)
-				q.send(m)
+			if len(q.wsConnections) > 0 {
+				data := q.store.Pop()
+				if data != nil {
+					m, b := data.(*Message)
+					if !b {
+						Warnfunc("Cannot cast %s to message", data)
+					}
+					q.send(m)
+				}
 			}
 		}
 	}(&cont)

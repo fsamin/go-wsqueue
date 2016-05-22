@@ -74,7 +74,7 @@ func main() {
 
 func server() {
 	r := mux.NewRouter()
-	s := wsqueue.NewServer(r, "", "", "")
+	s := wsqueue.NewServer(r, "")
 	q := s.CreateTopic("topic1")
 
 	q.OpenedConnectionHandler = func(c *wsqueue.Conn) {
@@ -182,7 +182,7 @@ func main() {
 
 func server() {
 	r := mux.NewRouter()
-	s := wsqueue.NewServer(r, "", "", "")
+	s := wsqueue.NewServer(r, "")
 	q := s.CreateQueue("queue1", 10)
 
 	http.Handle("/", r)

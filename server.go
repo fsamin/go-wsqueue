@@ -20,6 +20,13 @@ import (
 //and is already widely supported by existing loggers.
 var Logfunc func(string, ...interface{}) = log.Printf
 
+//Warnfunc is a function that logs the provided message with optional
+//fmt.Sprintf-style arguments. By default, logs to the default log.Logger.
+//setting it to nil can be used to disable logging for this package.
+//This doesn’t enforce a coupling with any specific external package
+//and is already widely supported by existing loggers.
+var Warnfunc func(string, ...interface{}) = log.Printf
+
 //Server is a server
 type Server struct {
 	Router      *mux.Router
@@ -27,17 +34,18 @@ type Server struct {
 }
 
 type StorageDriver interface {
-	Open(options *StorageOptions)
+	Open(options *Options)
 	Push(data interface{})
 	Pop() interface{}
 }
 
-type StorageOptions map[string]interface{}
-
 //Options is options on topic or queues
 type Options struct {
-	ACL ACL `json:"acl,omitempty"`
+	ACL     ACL            `json:"acl,omitempty"`
+	Storage StorageOptions `json:"storage,omitempty"`
 }
+
+type StorageOptions map[string]interface{}
 
 //ConnID a a connection ID
 type ConnID string
@@ -74,7 +82,7 @@ func createHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			Logfunc("Cannot upgrade connection %s", err.Error())
+			Warnfunc("Cannot upgrade connection %s", err.Error())
 			w.Write([]byte(fmt.Sprintf("Cannot upgrade connection %s", err.Error())))
 			w.WriteHeader(426)
 			return
@@ -112,7 +120,7 @@ func createHandler(
 			if (*onMessageCallback) != nil {
 				var parsedMessage Message
 				if e := json.Unmarshal(message, &parsedMessage); err != nil {
-					Logfunc("Cannot Unmarshall message", e.Error())
+					Warnfunc("Cannot Unmarshall message", e.Error())
 				}
 				(*onMessageCallback)(conn, &parsedMessage)
 			}
