@@ -18,14 +18,14 @@ import (
 //setting it to nil can be used to disable logging for this package.
 //This doesn’t enforce a coupling with any specific external package
 //and is already widely supported by existing loggers.
-var Logfunc func(string, ...interface{}) = log.Printf
+var Logfunc = log.Printf
 
 //Warnfunc is a function that logs the provided message with optional
 //fmt.Sprintf-style arguments. By default, logs to the default log.Logger.
 //setting it to nil can be used to disable logging for this package.
 //This doesn’t enforce a coupling with any specific external package
 //and is already widely supported by existing loggers.
-var Warnfunc func(string, ...interface{}) = log.Printf
+var Warnfunc = log.Printf
 
 //Server is a server
 type Server struct {
@@ -33,6 +33,7 @@ type Server struct {
 	RoutePrefix string
 }
 
+//StorageDriver is in-memory Stack or Redis server
 type StorageDriver interface {
 	Open(options *Options)
 	Push(data interface{})
@@ -45,6 +46,7 @@ type Options struct {
 	Storage StorageOptions `json:"storage,omitempty"`
 }
 
+//StorageOptions is a collection of options, see storage documentation
 type StorageOptions map[string]interface{}
 
 //ConnID a a connection ID
@@ -75,11 +77,24 @@ func createHandler(
 	openedConnectionCallback *func(*Conn),
 	closedConnectionCallback *func(*Conn),
 	onMessageCallback *func(*Conn, *Message) error,
+	options *Options,
 ) func(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		if options != nil && len(options.ACL) > 0 {
+			for _, ace := range options.ACL {
+				switch ace.Scheme() {
+				case ACLSSchemeWorld:
+					Logfunc("Connection Authorized")
+				case ACLSSchemeIP:
+
+				}
+			}
+		}
+
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			Warnfunc("Cannot upgrade connection %s", err.Error())

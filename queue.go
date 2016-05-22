@@ -72,6 +72,7 @@ func (s *Server) RegisterQueue(q *Queue) {
 		&q.newConsumerHandler,
 		&q.consumerExitedHandler,
 		&q.ackHandler,
+		q.Options,
 	)
 	q.store.Open(q.Options)
 	q.handle(5)

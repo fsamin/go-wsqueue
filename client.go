@@ -60,13 +60,13 @@ func (c *Client) reconnect(q string, t wsqueueType, nbRetry int) error {
 	var f = NewFibonacci()
 	for {
 		if i != -1 && i > nbRetry {
-			Logfunc("Unable to connect to %s : %s", string(t), q)
+			Warnfunc("Unable to connect to %s : %s", string(t), q)
 			return fmt.Errorf("Unable to connect to %s : %s", string(t), q)
 		}
 		if c.conn == nil {
 			i++
 			if err := c.connect(q, t); err != nil {
-				Logfunc("Waiting before retry connection to %s : %s", string(t), q)
+				Warnfunc("Waiting before retry connection to %s : %s", string(t), q)
 				f.WaitForIt(time.Second)
 			}
 		} else {

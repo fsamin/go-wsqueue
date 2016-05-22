@@ -26,6 +26,7 @@ func NewStack() *Stack {
 	return s
 }
 
+//Open the connection to the storage driver
 func (s *Stack) Open(o *Options) {
 	if o != nil {
 		m := o.Storage

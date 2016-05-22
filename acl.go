@@ -1,11 +1,7 @@
 package wsqueue
 
 //ACL  stands for Access Control List. It's a slice of permission for a queue or a topic
-type ACL struct {
-	ListACEs []ACE `json:"list_ACE,omitempty"`
-	queue    *Queue
-	topic    *Topic
-}
+type ACL []ACE
 
 //ACE stands for Access Control Entity
 type ACE interface {

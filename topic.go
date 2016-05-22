@@ -46,6 +46,7 @@ func (s *Server) RegisterTopic(t *Topic) {
 		&t.OpenedConnectionHandler,
 		&t.ClosedConnectionHandler,
 		&t.OnMessageHandler,
+		t.Options,
 	)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/topic/"+t.Topic, handler)
 }
