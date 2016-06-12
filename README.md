@@ -2,6 +2,8 @@
 
 WIP
 
+[![Build Status](https://travis-ci.org/fsamin/go-wsqueue.svg?branch=master)](https://travis-ci.org/fsamin/go-wsqueue)
+
 ## Introduction
 
 - Golang API over gorilla/mux and gorilla/websocket

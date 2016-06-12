@@ -4,8 +4,9 @@ go:
   - tip
 
 install: 
- - go get -i
+ - go get
 
 script:
+  - go test -i 
   - go test -v ./...
 
