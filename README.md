@@ -1,8 +1,6 @@
 # go-wsqueue
 
-WIP
-
-[![Build Status](https://travis-ci.org/fsamin/go-wsqueue.svg?branch=master)](https://travis-ci.org/fsamin/go-wsqueue)
+[![Build Status](https://travis-ci.org/fsamin/go-wsqueue.svg?branch=master)](https://travis-ci.org/fsamin/go-wsqueue) [![Godoc Status](https://img.shields.io/badge/godoc-available-brightgreen.svg)](https://godoc.org/github.com/fsamin/go-wsqueue)
 
 ## Introduction
 
