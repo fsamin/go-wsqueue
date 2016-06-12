@@ -14,8 +14,8 @@ type Header map[string]string
 
 //Message message
 type Message struct {
-	Header     Header `json:"metadata,omitempty"`
-	Body       string            `json:"data"`
+	Header Header `json:"metadata,omitempty"`
+	Body   string `json:"data"`
 }
 
 func newMessage(data interface{}) (*Message, error) {
@@ -64,7 +64,17 @@ func (m *Message) String() string {
 	return s
 }
 
+//ID returns message if
 func (m *Message) ID() string {
 	return m.Header["id"]
 }
 
+//ContentType returns content-type
+func (m *Message) ContentType() string {
+	return m.Header["content-type"]
+}
+
+//ApplicationType returns application-type. Empty if content-type is not application/json
+func (m *Message) ApplicationType() string {
+	return m.Header["application-type"]
+}

@@ -75,7 +75,7 @@ func (s *Server) RegisterQueue(q *Queue) {
 		q.Options,
 	)
 	q.store.Open(q.Options)
-	q.handle(5)
+	q.handle(100)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/queue/"+q.Queue, handler)
 	s.QueuesCounter.Add(1)
 }
@@ -150,7 +150,7 @@ func (q *Queue) handle(interval int64) {
 	var cont = true
 	go func(c *bool) {
 		for *c {
-			time.Sleep(time.Duration(interval) * time.Second)
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 			if len(q.wsConnections) > 0 {
 				data := q.store.Pop()
 				if data != nil {
