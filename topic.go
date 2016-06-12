@@ -40,7 +40,7 @@ func (s *Server) newTopic(topic string) (*Topic, error) {
 //RegisterTopic register
 func (s *Server) RegisterTopic(t *Topic) {
 	log.Printf("Register queue %s on route %s", t.Topic, s.RoutePrefix+"/wsqueue/topic/"+t.Topic)
-	handler := createHandler(
+	handler := s.createHandler(
 		t.mutex,
 		&t.wsConnections,
 		&t.OpenedConnectionHandler,
@@ -49,6 +49,8 @@ func (s *Server) RegisterTopic(t *Topic) {
 		t.Options,
 	)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/topic/"+t.Topic, handler)
+	s.TopicsCounter.Add(1)
+
 }
 
 func (t *Topic) publish(m Message) error {

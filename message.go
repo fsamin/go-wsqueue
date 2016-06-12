@@ -6,12 +6,16 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/satori/go.uuid"
 )
+
+type Header map[string]string
 
 //Message message
 type Message struct {
-	Header map[string]string `json:"metadata,omitempty"`
-	Body   string            `json:"data"`
+	Header     Header `json:"metadata,omitempty"`
+	Body       string            `json:"data"`
 }
 
 func newMessage(data interface{}) (*Message, error) {
@@ -43,6 +47,7 @@ func newMessage(data interface{}) (*Message, error) {
 		}
 		m.Body = string(b)
 	}
+	m.Header["id"] = uuid.NewV1().String()
 	m.Header["date"] = time.Now().String()
 	m.Header["host"], _ = os.Hostname()
 	return &m, nil
@@ -58,3 +63,8 @@ func (m *Message) String() string {
 	s = s + "\n" + m.Body
 	return s
 }
+
+func (m *Message) ID() string {
+	return m.Header["id"]
+}
+

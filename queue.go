@@ -66,7 +66,7 @@ func (s *Server) newQueue(name string, bufferSize int) (*Queue, error) {
 //RegisterQueue register
 func (s *Server) RegisterQueue(q *Queue) {
 	Logfunc("Register queue %s on route %s", q.Queue, s.RoutePrefix+"/wsqueue/queue/"+q.Queue)
-	handler := createHandler(
+	handler := s.createHandler(
 		q.mutex,
 		&q.wsConnections,
 		&q.newConsumerHandler,
@@ -77,6 +77,7 @@ func (s *Server) RegisterQueue(q *Queue) {
 	q.store.Open(q.Options)
 	q.handle(5)
 	s.Router.HandleFunc(s.RoutePrefix+"/wsqueue/queue/"+q.Queue, handler)
+	s.QueuesCounter.Add(1)
 }
 
 type loadBalancer struct {

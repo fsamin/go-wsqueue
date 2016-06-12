@@ -2,6 +2,7 @@ package wsqueue
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,8 +30,12 @@ var Warnfunc = log.Printf
 
 //Server is a server
 type Server struct {
-	Router      *mux.Router
-	RoutePrefix string
+	Router          *mux.Router
+	RoutePrefix     string
+	QueuesCounter   *expvar.Int
+	TopicsCounter   *expvar.Int
+	ClientsCounter  *expvar.Int
+	MessagesCounter *expvar.Int
 }
 
 //StorageDriver is in-memory Stack or Redis server
@@ -68,10 +73,18 @@ func NewServer(router *mux.Router, routePrefix string) *Server {
 		Router:      router,
 		RoutePrefix: routePrefix,
 	}
+	router.HandleFunc(routePrefix+"/vars", varsHandler)
+	if routePrefix != "" {
+		routePrefix = "." + routePrefix
+	}
+	s.QueuesCounter = expvar.NewInt("wsqueue" + routePrefix + ".stats.queues.counter")
+	s.TopicsCounter = expvar.NewInt("wsqueue" + routePrefix + ".stats.topics.counter")
+	s.ClientsCounter = expvar.NewInt("wsqueue" + routePrefix + ".stats.clients.counter")
+	s.MessagesCounter = expvar.NewInt("wsqueue" + routePrefix + ".stats.messages.counter")
+
 	return s
 }
-
-func createHandler(
+func (s *Server) createHandler(
 	mutex *sync.RWMutex,
 	wsConnections *map[ConnID]*Conn,
 	openedConnectionCallback *func(*Conn),
@@ -85,7 +98,11 @@ func createHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		if options != nil && len(options.ACL) > 0 {
-
+			if !checkACL(options.ACL, w, r) {
+				Warnfunc("Not Authorized by ACL")
+				w.Write([]byte("Not Authorized by ACL"))
+				return
+			}
 		}
 
 		c, err := upgrader.Upgrade(w, r, nil)
@@ -112,6 +129,8 @@ func createHandler(
 			go (*openedConnectionCallback)(conn)
 		}
 
+		s.ClientsCounter.Add(1)
+
 		defer c.Close()
 		for {
 			_, message, err := c.ReadMessage()
@@ -122,6 +141,7 @@ func createHandler(
 				if (*closedConnectionCallback) != nil {
 					(*closedConnectionCallback)(conn)
 				}
+				s.ClientsCounter.Add(-1)
 				break
 			}
 
@@ -135,4 +155,18 @@ func createHandler(
 		}
 
 	}
+}
+
+func varsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprintf(w, "{\n")
+	first := true
+	expvar.Do(func(kv expvar.KeyValue) {
+		if !first {
+			fmt.Fprintf(w, ",\n")
+		}
+		first = false
+		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+	})
+	fmt.Fprintf(w, "\n}\n")
 }

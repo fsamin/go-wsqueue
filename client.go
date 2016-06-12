@@ -104,3 +104,13 @@ func (c *Client) handler(q string, chanMessage chan Message, chanError chan erro
 		}
 	}
 }
+
+func (c *Client) Ack(msg *Message) error {
+
+	return nil
+}
+
+func (c *Client) Reply(msg *Message, response *Message) error {
+
+	return nil
+}
