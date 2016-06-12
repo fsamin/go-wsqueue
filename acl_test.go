@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/phayes/freeport"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckACLShouldAuthorizeEveryoneWhenACEIsSetToWord(t *testing.T) {
-	var testID = 0
-
+	var port = freeport.GetPort()
 	wait := make(chan bool, 1)
 
 	//setup ACL
@@ -23,25 +23,28 @@ func TestCheckACLShouldAuthorizeEveryoneWhenACEIsSetToWord(t *testing.T) {
 		assert.True(t, checkACL(acl, w, r), "check should return true")
 		wait <- true
 	}
-	http.HandleFunc(fmt.Sprintf("/%d", testID), handler)
+	http.HandleFunc(fmt.Sprintf("/%d", port), handler)
 	//Run the server
-	go http.ListenAndServe(fmt.Sprintf(":5880%d", testID), nil)
+	t.Logf("Starting test server on port %d", port)
+	go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	client.Get(fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID))
+	res, err := client.Get(fmt.Sprintf("http://localhost:%d/%d", port, port))
+	assert.NoError(t, err)
+	assert.Equal(t, 200, res.StatusCode, "status code should be 200")
 
 	<-wait
 }
 
 func TestCheckACLShouldAuthorizeLocalIPWhenACEIsSetLocalIP(t *testing.T) {
-	var testID = 1
+	var port = freeport.GetPort()
 	wait := make(chan bool, 1)
 
 	//setup ACL
 	acl := ACL{
-		&ACEIP{"127.0.0.1"},
+		&ACEIP{"localhost0"},
 	}
 
 	//setup server
@@ -49,22 +52,25 @@ func TestCheckACLShouldAuthorizeLocalIPWhenACEIsSetLocalIP(t *testing.T) {
 		assert.True(t, checkACL(acl, w, r), "check should return true")
 		wait <- true
 	}
-	http.HandleFunc(fmt.Sprintf("/%d", testID), handler)
+	http.HandleFunc(fmt.Sprintf("/%d", port), handler)
 	//Run the server
-	go http.ListenAndServe(fmt.Sprintf(":5880%d", testID), nil)
+	t.Logf("Starting test server on port %d", port)
+	go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
-	req.Header.Set("X-Forwarded-For", "127.0.0.1")
-	client.Do(req)
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/%d", port, port), nil)
+	req.Header.Set("X-Forwarded-For", "localhost0")
+	res, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, res.StatusCode, "status code should be 200")
 
 	<-wait
 }
 
 func TestCheckACLShouldUnauthorizeLocalIPWhenACEIPIsSetToFooBar(t *testing.T) {
-	var testID = 2
+	var port = freeport.GetPort()
 	wait := make(chan bool, 2)
 
 	//setup ACL
@@ -77,16 +83,18 @@ func TestCheckACLShouldUnauthorizeLocalIPWhenACEIPIsSetToFooBar(t *testing.T) {
 		assert.False(t, checkACL(acl, w, r), "check should return false")
 		wait <- true
 	}
-	http.HandleFunc(fmt.Sprintf("/%d", testID), handler)
+	http.HandleFunc(fmt.Sprintf("/%d", port), handler)
 	//Run the server
-	go http.ListenAndServe(fmt.Sprintf(":5880%d", testID), nil)
+	t.Logf("Starting test server on port %d", port)
+	go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
-	req.Header.Set("X-Forwarded-For", "127.0.0.1")
-	res, _ := client.Do(req)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/%d", port, port), nil)
+	req.Header.Set("X-Forwarded-For", "localhost")
+	res, err := client.Do(req)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "status code should be "+string(http.StatusUnauthorized))
 	wait <- true
 
@@ -95,7 +103,7 @@ func TestCheckACLShouldUnauthorizeLocalIPWhenACEIPIsSetToFooBar(t *testing.T) {
 }
 
 func TestCheckACLShouldAuthorizeFooBarWhenACEDigetIsSetToFooBar(t *testing.T) {
-	var testID = 3
+	var port = freeport.GetPort()
 	wait := make(chan bool, 1)
 
 	//setup ACL
@@ -108,22 +116,25 @@ func TestCheckACLShouldAuthorizeFooBarWhenACEDigetIsSetToFooBar(t *testing.T) {
 		assert.True(t, checkACL(acl, w, r), "check should return true")
 		wait <- true
 	}
-	http.HandleFunc(fmt.Sprintf("/%d", testID), handler)
+	http.HandleFunc(fmt.Sprintf("/%d", port), handler)
 	//Run the server
-	go http.ListenAndServe(fmt.Sprintf(":5880%d", testID), nil)
+	t.Logf("Starting test server on port %d", port)
+	go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/%d", port, port), nil)
 	req.SetBasicAuth("Foo", "Bar")
-	client.Do(req)
+	res, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, res.StatusCode, "status code should be 200")
 
 	<-wait
 }
 
 func TestCheckACLShouldUnauthorizeFooBarWhenACEDigetIsSetToXXXXX(t *testing.T) {
-	var testID = 4
+	var port = freeport.GetPort()
 	wait := make(chan bool, 2)
 
 	//setup ACL
@@ -136,16 +147,18 @@ func TestCheckACLShouldUnauthorizeFooBarWhenACEDigetIsSetToXXXXX(t *testing.T) {
 		assert.False(t, checkACL(acl, w, r), "check should return false")
 		wait <- true
 	}
-	http.HandleFunc(fmt.Sprintf("/%d", testID), handler)
+	http.HandleFunc(fmt.Sprintf("/%d", port), handler)
 	//Run the server
-	go http.ListenAndServe(fmt.Sprintf(":5880%d", testID), nil)
+	t.Logf("Starting test server on port %d", port)
+	go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/%d", port, port), nil)
 	req.SetBasicAuth("Foo", "Bar")
-	res, _ := client.Do(req)
+	res, err := client.Do(req)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "status code should be "+string(http.StatusUnauthorized))
 	wait <- true
 
