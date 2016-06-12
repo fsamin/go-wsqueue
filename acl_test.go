@@ -30,7 +30,7 @@ func TestCheckACLShouldAuthorizeEveryoneWhenACEIsSetToWord(t *testing.T) {
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	client.Get(fmt.Sprintf("http://localhost:5880%d/%d", testID, testID))
+	client.Get(fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID))
 
 	<-wait
 }
@@ -56,7 +56,7 @@ func TestCheckACLShouldAuthorizeLocalIPWhenACEIsSetLocalIP(t *testing.T) {
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://localhost:5880%d/%d", testID, testID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
 	req.Header.Set("X-Forwarded-For", "127.0.0.1")
 	client.Do(req)
 
@@ -84,7 +84,7 @@ func TestCheckACLShouldUnauthorizeLocalIPWhenACEIPIsSetToFooBar(t *testing.T) {
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://localhost:5880%d/%d", testID, testID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
 	req.Header.Set("X-Forwarded-For", "127.0.0.1")
 	res, _ := client.Do(req)
 	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "status code should be "+string(http.StatusUnauthorized))
@@ -115,7 +115,7 @@ func TestCheckACLShouldAuthorizeFooBarWhenACEDigetIsSetToFooBar(t *testing.T) {
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://localhost:5880%d/%d", testID, testID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
 	req.SetBasicAuth("Foo", "Bar")
 	client.Do(req)
 
@@ -143,7 +143,7 @@ func TestCheckACLShouldUnauthorizeFooBarWhenACEDigetIsSetToXXXXX(t *testing.T) {
 	//Run the test
 	t.Logf("Calling the test server")
 	client := http.DefaultClient
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://localhost:5880%d/%d", testID, testID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:5880%d/%d", testID, testID), nil)
 	req.SetBasicAuth("Foo", "Bar")
 	res, _ := client.Do(req)
 	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "status code should be "+string(http.StatusUnauthorized))
